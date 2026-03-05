@@ -35,6 +35,6 @@ install: build
 	@cp $(BUILD_DIR)/$(PLUGIN_NAME).plugin $(DEST)/$(PLUGIN_NAME)/
 	@cp plugin.json $(DEST)/$(PLUGIN_NAME)/
 	@mkdir -p $(BADGEDIR)/sd/turret
-	#@cp sounds/*.mp3 $(BADGEDIR)/sd/turret/ # Disabled for debugging speeds, files already on device
+	@cp sounds/*.mp3 $(BADGEDIR)/sd/turret/
 	badgefs -u $(BADGEDIR)
 	@echo "Installed to $(DEST)/$(PLUGIN_NAME)/"

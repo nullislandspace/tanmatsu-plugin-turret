@@ -45,9 +45,9 @@ static uint32_t prng_next(void) {
 }
 
 // Sound file lists
-static char startup_files[MAX_SOUNDS][64];
+static char startup_files[MAX_SOUNDS][280];
 static int startup_count = 0;
-static char standby_files[MAX_SOUNDS][64];
+static char standby_files[MAX_SOUNDS][280];
 static int standby_count = 0;
 
 // Scan sound directory for startup_*.mp3 and standby_*.mp3
@@ -84,7 +84,7 @@ static void scan_sound_files(void) {
 }
 
 // Play a random sound from the given list
-static void play_random_sound(char files[][64], int count) {
+static void play_random_sound(char files[][280], int count) {
     if (count <= 0) return;
     int idx = prng_next() % count;
     asp_log_info(TAG, "Playing: %s", files[idx]);

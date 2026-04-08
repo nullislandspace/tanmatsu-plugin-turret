@@ -118,7 +118,7 @@ static void decode_loop(void) {
             if (!g_format_logged) {
                 asp_log_info("turrent", "Format: %d Hz, %d ch, %d kbps",
                             info.hz, info.channels, info.bitrate_kbps);
-                if (info.hz != g_sample_rate) {
+                if ((uint32_t)info.hz != g_sample_rate) {
                     asp_audio_stop();
                     asp_audio_set_rate(info.hz);
                     asp_audio_start();

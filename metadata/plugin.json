@@ -1,9 +1,4 @@
 {
-    "name": "Turret",
-    "slug": "at.cavac.turret",
-    "version": "1.0.0",
-    "author": "Rene Schickbauer",
-    "description": "Plays turret sounds when device is picked up or put down",
     "type": "service",
     "api_version": 2,
     "permissions": ["audio", "orientation", "led"],

@@ -5,14 +5,14 @@
 // using gyroscope and accelerometer data, and plays random turret sounds.
 
 #include "tanmatsu_plugin.h"
+#include "plugin_context.h"
 #include "asp/orientation.h"
 #include "audio.h"
 #include <string.h>
 #include <stdio.h>
 #include <dirent.h>
 
-#define TAG "turrent"
-#define SOUND_DIR "/sd/turret"
+#define TAG "turret"
 #define MAX_SOUNDS 16
 #define LED_INDEX 4
 
@@ -50,11 +50,11 @@ static int startup_count = 0;
 static char standby_files[MAX_SOUNDS][280];
 static int standby_count = 0;
 
-// Scan sound directory for startup_*.mp3 and standby_*.mp3
-static void scan_sound_files(void) {
-    DIR* dir = opendir(SOUND_DIR);
+// Scan plugin directory for startup_*.mp3 and standby_*.mp3
+static void scan_sound_files(const char* sound_dir) {
+    DIR* dir = opendir(sound_dir);
     if (!dir) {
-        asp_log_error(TAG, "Failed to open sound dir: %s", SOUND_DIR);
+        asp_log_error(TAG, "Failed to open sound dir: %s", sound_dir);
         return;
     }
 
@@ -70,11 +70,11 @@ static void scan_sound_files(void) {
 
         if (strncmp(name, "startup_", 8) == 0 && startup_count < MAX_SOUNDS) {
             snprintf(startup_files[startup_count], sizeof(startup_files[0]),
-                     "%s/%s", SOUND_DIR, name);
+                     "%s/%s", sound_dir, name);
             startup_count++;
         } else if (strncmp(name, "standby_", 8) == 0 && standby_count < MAX_SOUNDS) {
             snprintf(standby_files[standby_count], sizeof(standby_files[0]),
-                     "%s/%s", SOUND_DIR, name);
+                     "%s/%s", sound_dir, name);
             standby_count++;
         }
     }
@@ -94,9 +94,9 @@ static void play_random_sound(char files[][280], int count) {
 // Plugin metadata
 static const plugin_info_t plugin_info = {
     .name = "Turret",
-    .slug = "turrent",
+    .slug = "at.cavac.turret",
     .version = "1.0.0",
-    .author = "Tanmatsu",
+    .author = "Rene Schickbauer",
     .description = "Plays turret sounds when device is picked up or put down",
     .api_version = TANMATSU_PLUGIN_API_VERSION,
     .type = PLUGIN_TYPE_SERVICE,
@@ -149,8 +149,8 @@ static void plugin_service_run(plugin_context_t* ctx) {
     asp_orientation_enable_gyroscope();
     asp_orientation_enable_accelerometer();
 
-    // Scan sound files
-    scan_sound_files();
+    // Scan sound files from plugin install directory
+    scan_sound_files(ctx->plugin_path);
 
     // Seed PRNG
     prng_seed(asp_plugin_get_tick_ms());

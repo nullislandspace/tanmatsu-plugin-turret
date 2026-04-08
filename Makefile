@@ -47,6 +47,9 @@ apprepo: build
 	mkdir -p $(APP_REPO_PATH)
 	cp metadata/metadata.json $(APP_REPO_PATH)/metadata.json
 	cp metadata/plugin.json $(APP_REPO_PATH)/plugin.json
+	cp metadata/icon16.png $(APP_REPO_PATH)/icon16.png
+	cp metadata/icon32.png $(APP_REPO_PATH)/icon32.png
+	cp metadata/icon64.png $(APP_REPO_PATH)/icon64.png
 	cp metadata/startup_*.mp3 $(APP_REPO_PATH)/
 	cp metadata/standby_*.mp3 $(APP_REPO_PATH)/
 	cp $(BUILD_DIR)/$(PLUGIN_NAME).plugin $(APP_REPO_PATH)/$(PLUGIN_NAME).plugin

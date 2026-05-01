@@ -1,10 +1,11 @@
 {
     "name": "Turret",
     "description": "Plays turret sounds when device is picked up or put down",
+    "external_only": true,
     "categories": [
         "fun"
     ],
-    "version": "1.0.0",
+    "version": "2.0.0",
     "icon": {
         "16x16": "icon16.png",
         "32x32": "icon32.png",
@@ -18,7 +19,7 @@
                 "tanmatsu",
                 "konsool"
             ],
-            "revision": 1,
+            "revision": 2,
             "type": "plugin",
             "executable": "turret.plugin",
             "assets": [

@@ -16,15 +16,18 @@
 #include "minimp3.h"
 
 // ASP audio API
-extern int asp_audio_set_rate(uint32_t rate_hz);
-extern int asp_audio_set_volume(float percentage);
-extern int asp_audio_set_amplifier(bool enabled);
-extern int asp_audio_stop(void);
-extern int asp_audio_start(void);
-extern int asp_audio_write(void* samples, size_t samples_size, int64_t timeout_ms);
+#include <asp/audio.h>
+
+// ASP file API - asp_fastopen() gives us a DMA-capable internal-RAM stdio
+// buffer for /sd and /int paths so the SD-card driver can DMA directly
+// into it. Falls back to plain fopen when CONFIG_FATFS_USE_FASTOPEN is
+// off in the launcher build.
+#include <asp/file.h>
 
 // Buffer sizes
 #define READ_BUFFER_SIZE    (16 * 1024)  // 16KB read buffer (PSRAM)
+#define REFILL_THRESHOLD    (4 * 1024)   // Only refill when below this watermark
+                                         // so SD reads happen in big chunks.
 #define MAX_FRAME_SIZE      (1152 * 2)   // Max samples per MP3 frame (stereo)
 #define PCM_BUFFER_SIZE     (MAX_FRAME_SIZE * sizeof(int16_t))  // 4608 bytes
 
@@ -57,10 +60,18 @@ static volatile bool g_thread_in_decode = false;
 static char g_pending_path[256];
 static volatile bool g_new_file_pending = false;
 
-// Fill read buffer from file
+// Fill read buffer from file. Only does an SD read when the unread tail of
+// the buffer drops below REFILL_THRESHOLD; otherwise returns the current
+// fill level cheaply. Batches FATFS/SD work into infrequent large reads,
+// which has far lower latency variance than many small reads.
 static size_t fill_buffer(void) {
     if (!g_current_file) {
         return 0;
+    }
+
+    size_t available = (buffer_len > buffer_pos) ? (buffer_len - buffer_pos) : 0;
+    if (available >= REFILL_THRESHOLD) {
+        return available;
     }
 
     // Move remaining data to start of buffer
@@ -73,7 +84,7 @@ static size_t fill_buffer(void) {
         buffer_pos = 0;
     }
 
-    // Read more data
+    // Read more data - one large chunk to fill the buffer back up
     size_t space = READ_BUFFER_SIZE - buffer_len;
     if (space > 0) {
         size_t bytes_read = fread(read_buffer + buffer_len, 1, space, g_current_file);
@@ -96,7 +107,10 @@ static void decode_loop(void) {
         size_t available = fill_buffer();
 
         if (available < 4) {
-            // End of file
+            // End of file - pause our mixer slot so other plugins regain
+            // full volume immediately instead of waiting for our buffer to
+            // drain naturally.
+            asp_audio_stop();
             g_finished = true;
             g_playing = false;
             asp_log_info("turrent", "Audio playback finished");
@@ -118,11 +132,6 @@ static void decode_loop(void) {
             if (!g_format_logged) {
                 asp_log_info("turrent", "Format: %d Hz, %d ch, %d kbps",
                             info.hz, info.channels, info.bitrate_kbps);
-                if ((uint32_t)info.hz != g_sample_rate) {
-                    asp_audio_stop();
-                    asp_audio_set_rate(info.hz);
-                    asp_audio_start();
-                }
                 g_sample_rate = info.hz;
                 g_format_logged = true;
             }
@@ -133,6 +142,7 @@ static void decode_loop(void) {
         } else if (info.frame_bytes == 0) {
             // Need more data or invalid frame
             if (fill_buffer() == 0) {
+                asp_audio_stop();
                 g_finished = true;
                 g_playing = false;
                 asp_log_info("turrent", "Audio playback finished (no more data)");
@@ -147,12 +157,12 @@ static void decode_loop(void) {
 static void start_new_file(const char* path) {
     // Close any existing file
     if (g_current_file) {
-        fclose(g_current_file);
+        asp_fastclose(g_current_file);
         g_current_file = NULL;
     }
 
     // Open new file
-    g_current_file = fopen(path, "rb");
+    g_current_file = asp_fastopen(path, "rb");
     if (!g_current_file) {
         asp_log_error("turrent", "Failed to open: %s", path);
         g_playing = false;
@@ -168,12 +178,9 @@ static void start_new_file(const char* path) {
     g_format_logged = false;
     g_playing = true;
 
-    // Configure audio
-    asp_audio_stop();
-    asp_audio_set_rate(44100);
+    // Configure audio (mixer is fixed at 44.1 kHz; no rate change needed).
+    // The launcher manages amplifier and master volume.
     asp_audio_start();
-    asp_audio_set_amplifier(true);
-    asp_audio_set_volume(100.0f);
 
     asp_log_info("turrent", "Playing: %s", path);
 }
@@ -244,6 +251,15 @@ int audio_init(void) {
         return -1;
     }
 
+    // Raise the decoder above the plugin task (5) so it preempts UI/widget
+    // work right after an SD read returns. The launcher's audio mixer (when
+    // enabled) runs at 7, so 6 is safe.
+    extern int pthread_setschedprio(pthread_t thread, int prio);
+    int prio_err = pthread_setschedprio(decoder_thread, 6);
+    if (prio_err != 0) {
+        asp_log_warn("turrent", "Failed to raise decoder priority: %d", prio_err);
+    }
+
     g_thread_running = true;
     g_audio_initialized = true;
 
@@ -279,11 +295,9 @@ void audio_cleanup(void) {
     asp_plugin_delay_ms(50);
 
     if (g_current_file) {
-        fclose(g_current_file);
+        asp_fastclose(g_current_file);
         g_current_file = NULL;
     }
-
-    asp_audio_set_amplifier(false);
 
     if (read_buffer) {
         free(read_buffer);
@@ -322,7 +336,6 @@ void audio_play_file(const char* path) {
 void audio_stop(void) {
     g_playing = false;
     g_new_file_pending = false;
-    asp_audio_set_amplifier(false);
 }
 
 bool audio_is_finished(void) {

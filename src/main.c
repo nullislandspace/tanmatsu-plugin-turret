@@ -255,7 +255,6 @@ static const plugin_entry_t entry = {
     .menu_render = NULL,
     .menu_select = NULL,
     .service_run = plugin_service_run,
-    .hook_event = NULL,
 };
 
 // Register this plugin with the host
